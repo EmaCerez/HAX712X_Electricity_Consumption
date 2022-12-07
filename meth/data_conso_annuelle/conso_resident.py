@@ -1,4 +1,11 @@
+import geojson
 import pandas as pd
+
+granularities = {
+    "Municipalities": 'visualization/communes-version-simplifiee.geojson',
+    "Departments": 'visualization/departements-version-simplifiee.geojson',
+    "Regions": 'visualization/regions-version-simplifiee.geojson'
+}
 
 cons_total = "Consommation annuelle totale de l'adresse (MWh)"
 cons_moyen = "Consommation annuelle moyenne par logement de l'adresse (MWh)"
@@ -140,6 +147,26 @@ regions = {
     "Pays de la Loire": [44, 49, 53, 72, 85],
     "Provence-Alpes-Côte d'Azur": [4, 5, 6, 13, 83, 84]
 }
+
+with open(granularities['Municipalities']) as f:
+    muni_gj = geojson.load(f)
+muni_features = muni_gj['features']
+
+with open(granularities['Departments']) as f:
+    dep_gj = geojson.load(f)
+dep_features = dep_gj['features']
+
+departements = {}
+for i in range(1, 96):
+    departements[str(i) if i > 9 else f"0{i}"] = []
+
+for comm in muni_features:
+    if comm['properties']['code'][0:2] != "2A" and comm['properties']['code'][0:2] != "2B":
+        departements[f'{comm["properties"]["code"][0:2]}'].append(comm['properties']['nom'])
+
+numsDepts = {}
+for dep in dep_features:
+    numsDepts[dep['properties']['nom']] = dep['properties']['code']
 
 
 def Elec_Region(region: str, year: int) -> float:

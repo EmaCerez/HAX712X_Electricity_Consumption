@@ -6,20 +6,21 @@ import pandas as pd  # Data
 import streamlit as st  # Visualizing the maps on a browser page
 from streamlit_folium import st_folium  # Visualizing the maps on a browser page
 
-from data_conso_annuelle.conso_resident import Elec_Departement, Elec_Region as get_region_consumption
-from data_conso_annuelle.conso_resident import regions, ranking
-
-granularities = {
-    "Municipalities": 'visualization/communes-version-simplifiee.geojson',
-    "Departments": 'visualization/departements-version-simplifiee.geojson',
-    "Regions": 'visualization/regions-version-simplifiee.geojson'
-}
-
+from data_conso_annuelle.conso_resident import Elec_Departement, Elec_Commune, Elec_Region as get_region_consumption
+from data_conso_annuelle.conso_resident import granularities
+from data_conso_annuelle.conso_resident import regions, departements, numsDepts, ranking
+from data_conso_annuelle.conso_resident import all_df
 
 def display_reg_filter(reg_name):
     reg_list = [''] + list(regions)
     reg_index = reg_list.index(reg_name) if reg_name and reg_name in reg_list else 0
     return st.sidebar.selectbox('Region', reg_list, reg_index)
+
+
+def display_com_filter(com_name):
+    com_list = [''] + list(numsDepts.keys())
+    com_index = com_list.index(com_name) if com_name and com_name in com_list else 0
+    return st.sidebar.selectbox('Departments', com_list, com_index)
 
 
 def display(granularity: str, dataframe: Any, key: str = 'nom', zoom: float = 5, lat: float = 46.8534,
@@ -52,6 +53,7 @@ def display(granularity: str, dataframe: Any, key: str = 'nom', zoom: float = 5,
                                         f"{df_indexed.loc[df_col][0] if df_col in list(df_indexed.index) else 0:.3f} " \
                                         f"MWh"
 
+    print (choropleth.geojson.data['features'])
     choropleth.geojson.add_child(
         folium.features.GeoJsonTooltip(["nom", "cons"], labels=False)
     )
@@ -94,7 +96,30 @@ def load_department(year: int, reg: str = "Nouvelle-Aquitaine", zoom: float = 5,
                "cons": [Elec_Departement(i, year) for i in regions[f'{reg}']]}
     df = pd.DataFrame.from_dict(dataset)
     (lat, long) = (46.8534, 2.3488) if zoom == 5 else (lat, long)
-    display("Departments", df, "code", zoom, lat, long)
+    return display("Departments", df, "code", zoom, lat, long)
+
+
+def load_communes(year: int, dept: str = "Ain", zoom: float = 5, lat: float = 46.8534,
+                  long: float = 2.3488):
+    """
+
+    @param year:
+    @return:
+    """
+    if dept == '':
+        dept = "Ain"
+        lat = 46.8534
+        long = 2.3488
+    dept = numsDepts[dept]
+    df_temp = all_df[str(year)].drop_duplicates('Code INSEE de la commune')
+    dataset = {"nom": [], "cons": []}
+    for i, row in df_temp.iterrows():
+        if f'{row["Code INSEE de la commune"]}'[0:2] == dept:
+            dataset["nom"].append(row['Nom de la commune'])
+            dataset["cons"].append(row['Consommation annuelle moyenne de la commune (MWh)'])
+    df = pd.DataFrame.from_dict(dataset)
+    (lat, long) = (46.8534, 2.3488) if zoom == 5 else (lat, long)
+    display("Municipalities", df, "nom")
 
 
 def disp_top_3(year: int, order: str = "min"):
@@ -134,11 +159,24 @@ def main(lat_value1: int, lat_value2: int):
         st.caption(APP_SUB_TITLE)
         loaded_reg = load_regions(selected_year)
         selected_region = display_reg_filter(loaded_reg['region'])
+
         flag = round(float(lat_value1), 2) == round(loaded_reg['coordinates']['lat'], 2) \
                and round(float(lat_value2), 2) == round(loaded_reg['coordinates']['lat'], 2)
         default_zoom = set_zoom(flag)
-        loaded_dept = load_department(selected_year, selected_region, default_zoom, loaded_reg['coordinates']['lat'],
+
+        loaded_dept = load_department(selected_year,
+                                      selected_region,
+                                      default_zoom,
+                                      loaded_reg['coordinates']['lat'],
                                       loaded_reg['coordinates']['lng'])
+
+        selected_dept = display_com_filter(loaded_dept['region'])
+
+        load_communes(selected_year,
+                      selected_dept,
+                      default_zoom,
+                      loaded_dept['coordinates']['lat'],
+                      loaded_dept['coordinates']['lng'])
     with col2:
         disp_top_3(selected_year, "min")
         disp_top_3(selected_year, "max")
